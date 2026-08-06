@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+.env
+output/
+
+# AI tooling — kept local, never committed
+CLAUDE.md
+.claude/
+.claudesync/
+.aider*
