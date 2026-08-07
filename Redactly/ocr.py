@@ -6,6 +6,8 @@ import shutil
 from PIL import Image
 import pytesseract
 
+from redactly.preprocess import preprocess_for_ocr
+
 # pytesseract shells out to the tesseract binary; on Windows it's often
 # installed but not added to PATH, so fall back to the default install path.
 _DEFAULT_WINDOWS_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -16,11 +18,17 @@ if shutil.which("tesseract") is None and os.path.exists(_DEFAULT_WINDOWS_TESSERA
 def extract_text_boxes(image_path: str) -> list[dict]:
     """Run OCR on an image and return each detected word with its bounding box.
 
+    OCR runs on a preprocessed (possibly upscaled) version of the image for
+    better accuracy; box coordinates are scaled back to match the original.
+
     Each item in the returned list has keys: text, left, top, width, height, conf.
     Empty/whitespace text and non-text regions (conf < 0) are skipped.
     """
-    image = Image.open(image_path)
-    data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+    original_width = Image.open(image_path).width
+    processed = preprocess_for_ocr(image_path)
+    scale = processed.width / original_width
+
+    data = pytesseract.image_to_data(processed, output_type=pytesseract.Output.DICT)
 
     boxes = []
     for i in range(len(data["text"])):
@@ -32,10 +40,10 @@ def extract_text_boxes(image_path: str) -> list[dict]:
 
         boxes.append({
             "text": text,
-            "left": data["left"][i],
-            "top": data["top"][i],
-            "width": data["width"][i],
-            "height": data["height"][i],
+            "left": round(data["left"][i] / scale),
+            "top": round(data["top"][i] / scale),
+            "width": round(data["width"][i] / scale),
+            "height": round(data["height"][i] / scale),
             "conf": conf,
         })
 
