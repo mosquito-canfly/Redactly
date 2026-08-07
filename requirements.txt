@@ -2,3 +2,4 @@ pytesseract
 Pillow
 opencv-python
 python-dotenv
+google-genai
