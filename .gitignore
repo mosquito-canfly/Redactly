@@ -3,6 +3,8 @@ __pycache__/
 .env
 output/
 samples/
+models/
+*.onnx
 
 # AI tooling — kept local, never committed
 CLAUDE.md
