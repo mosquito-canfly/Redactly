@@ -11,7 +11,7 @@ from redactly.config import require_gemini_key
 
 # gemini-2.5-flash returns 404 for this account (deprecated for new users) —
 # reusing the model that test_connection() already confirmed works.
-_MODEL = "gemini-flash-latest"
+MODEL = "gemini-flash-latest"
 
 _DETECT_PROMPT = """You are a privacy redaction assistant. Find every region in \
 this image containing sensitive personal information: ID/IC numbers, faces, \
@@ -30,7 +30,7 @@ def test_connection() -> str:
     try:
         client = genai.Client(api_key=require_gemini_key())
         response = client.models.generate_content(
-            model=_MODEL,
+            model=MODEL,
             contents="Reply with exactly the word: OK",
         )
         return response.text
@@ -81,7 +81,7 @@ def detect_sensitive_regions(image_path: str) -> list[dict]:
 
         client = genai.Client(api_key=require_gemini_key())
         response = client.models.generate_content(
-            model=_MODEL,
+            model=MODEL,
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 _DETECT_PROMPT.format(width=width, height=height),

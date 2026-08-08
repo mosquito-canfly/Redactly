@@ -9,6 +9,7 @@ from redactly.ocr import extract_text_boxes
 from redactly.redact import redact_boxes, DEFAULT_BLUR_RADIUS
 from redactly.classify import filter_sensitive_boxes
 from redactly.llm import detect_sensitive_regions
+from redactly.agent import run_agent
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 VISION_CALL_DELAY = 1.5  # seconds between Gemini calls in batch mode, avoids free-tier per-minute quota
@@ -21,6 +22,7 @@ def parse_args(argv=None):
     parser.add_argument("--blur", type=int, default=DEFAULT_BLUR_RADIUS, help="blur strength / Gaussian radius (default: %(default)s)")
     parser.add_argument("--no-vision", action="store_true", help="skip the Gemini vision step; use only OCR + regex")
     parser.add_argument("--dry-run", action="store_true", help="print what would be redacted, but don't blur or save")
+    parser.add_argument("--agent", action="store_true", help="let Gemini drive redaction via tool calls instead of the fixed pipeline (single image only)")
     return parser.parse_args(argv)
 
 
@@ -143,6 +145,15 @@ def main():
     if not os.path.exists(args.input):
         print(f"Error: input path not found: {args.input}")
         sys.exit(1)
+
+    if args.agent:
+        if os.path.isdir(args.input):
+            print("Error: --agent only supports a single image, not a folder.")
+            sys.exit(1)
+        output_path = args.output or os.path.join("output", f"redacted_{os.path.basename(args.input)}")
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        run_agent(args.input, output_path)
+        return
 
     if args.no_vision:
         print_no_vision_warning()
