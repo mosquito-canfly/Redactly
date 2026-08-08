@@ -3,6 +3,7 @@
 from PIL import Image, ImageFilter
 
 _DEFAULT_PADDING = 10
+DEFAULT_BLUR_RADIUS = 15
 
 
 def pad_box(box: dict, padding: int, img_width: int, img_height: int) -> dict:
@@ -55,7 +56,13 @@ def merge_overlapping_boxes(boxes: list[dict]) -> list[dict]:
     return boxes
 
 
-def redact_boxes(image_path: str, boxes: list[dict], output_path: str, padding: int = _DEFAULT_PADDING) -> None:
+def redact_boxes(
+    image_path: str,
+    boxes: list[dict],
+    output_path: str,
+    padding: int = _DEFAULT_PADDING,
+    blur_radius: int = DEFAULT_BLUR_RADIUS,
+) -> None:
     """Pad, merge, and blur each box region on the image; save the result to output_path."""
     image = Image.open(image_path)
 
@@ -66,7 +73,7 @@ def redact_boxes(image_path: str, boxes: list[dict], output_path: str, padding: 
         left, top = box["left"], box["top"]
         right, bottom = left + box["width"], top + box["height"]
         region = image.crop((left, top, right, bottom))
-        blurred = region.filter(ImageFilter.GaussianBlur(radius=15))
+        blurred = region.filter(ImageFilter.GaussianBlur(radius=blur_radius))
         image.paste(blurred, (left, top))
 
     image.save(output_path)
