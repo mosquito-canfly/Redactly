@@ -17,6 +17,12 @@ _DETECT_PROMPT = """You are a privacy redaction assistant. Find every region in 
 this image containing sensitive personal information: ID/IC numbers, faces, \
 full names, addresses, emails, phone numbers, account numbers, signatures.
 
+Also find passwords and credential fields: any text inside or directly below \
+a field labeled "password", "passcode", "PIN", or similar is sensitive and its \
+region must be returned — including cases where a "show password" toggle has \
+revealed it as plain text. Also detect other credential-like secrets: API keys, \
+tokens, security codes, and OTPs.
+
 The image is exactly {width}x{height} pixels. Return coordinates in real \
 pixels within those bounds (left/top from 0,0, no rescaling).
 
