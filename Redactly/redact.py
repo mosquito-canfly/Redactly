@@ -6,6 +6,22 @@ _DEFAULT_PADDING = 10
 DEFAULT_BLUR_RADIUS = 15
 
 
+def filter_boxes_by_targets(boxes: list[dict], targets: str) -> list[dict]:
+    """Filter detected boxes down to the requested category before padding/merging/blurring.
+
+    targets: "all" (everything), "faces" (label == "face" only), or
+    "text" (everything else — regex boxes have no label at all, vision boxes
+    may be labeled "email", "id_number", etc).
+    """
+    if targets == "all":
+        return boxes
+    if targets == "faces":
+        return [box for box in boxes if box.get("label") == "face"]
+    if targets == "text":
+        return [box for box in boxes if box.get("label") != "face"]
+    raise ValueError(f"invalid targets: {targets!r}, must be 'all', 'faces', or 'text'")
+
+
 def pad_box(box: dict, padding: int, img_width: int, img_height: int) -> dict:
     """Return a copy of box expanded by padding pixels, clamped to the image bounds."""
     left = max(0, box["left"] - padding)
@@ -91,6 +107,13 @@ if __name__ == "__main__":
 
     separate = [{"left": 0, "top": 0, "width": 5, "height": 5}, {"left": 50, "top": 50, "width": 5, "height": 5}]
     assert len(merge_overlapping_boxes(separate)) == 2
+
+    mixed = [{"left": 0, "top": 0, "width": 5, "height": 5, "label": "face"},
+             {"left": 10, "top": 10, "width": 5, "height": 5, "label": "email"},
+             {"left": 20, "top": 20, "width": 5, "height": 5}]  # no label (regex box)
+    assert filter_boxes_by_targets(mixed, "all") == mixed
+    assert filter_boxes_by_targets(mixed, "faces") == [mixed[0]]
+    assert filter_boxes_by_targets(mixed, "text") == [mixed[1], mixed[2]]
 
     img = Image.new("RGB", (100, 100), "white")
     img.save("_selftest.png")

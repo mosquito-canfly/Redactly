@@ -6,7 +6,7 @@ import sys
 import time
 
 from redactly.ocr import extract_text_boxes
-from redactly.redact import redact_boxes, DEFAULT_BLUR_RADIUS
+from redactly.redact import redact_boxes, filter_boxes_by_targets, DEFAULT_BLUR_RADIUS
 from redactly.classify import filter_sensitive_boxes
 from redactly.llm import detect_sensitive_regions
 from redactly.faces import detect_faces
@@ -23,6 +23,7 @@ def parse_args(argv=None):
     parser.add_argument("--blur", type=int, default=DEFAULT_BLUR_RADIUS, help="blur strength / Gaussian radius (default: %(default)s)")
     parser.add_argument("--no-vision", action="store_true", help="text only: OCR + regex, skip face detection and Gemini")
     parser.add_argument("--smart", action="store_true", help="also call Gemini vision (catches passwords, names, hard-to-read IDs). Uses quota.")
+    parser.add_argument("--targets", choices=["all", "faces", "text"], default="all", help="which detected boxes to blur (default: %(default)s)")
     parser.add_argument("--dry-run", action="store_true", help="print what would be redacted, but don't blur or save")
     parser.add_argument("--agent", action="store_true", help="let Gemini drive redaction via tool calls instead of the fixed pipeline (single image only)")
     return parser.parse_args(argv)
@@ -105,7 +106,15 @@ def print_summary(
         print("Gemini detection: skipped (use --smart to enable)")
 
 
-def process_image(image_path: str, output_path: str, blur: int, use_faces: bool, use_gemini: bool, dry_run: bool) -> bool:
+def process_image(
+    image_path: str,
+    output_path: str,
+    blur: int,
+    use_faces: bool,
+    use_gemini: bool,
+    dry_run: bool,
+    targets: str = "all",
+) -> bool:
     """Run the full detect+redact pipeline on one image. Returns True on success."""
     try:
         regex_boxes = detect_regex_boxes(image_path)
@@ -113,10 +122,10 @@ def process_image(image_path: str, output_path: str, blur: int, use_faces: bool,
         gemini_boxes = detect_vision_boxes(image_path, skip=not use_gemini)
         print_summary(regex_boxes, face_boxes, gemini_boxes, use_faces, use_gemini)
 
-        all_boxes = regex_boxes + face_boxes + gemini_boxes
+        all_boxes = filter_boxes_by_targets(regex_boxes + face_boxes + gemini_boxes, targets)
 
         if dry_run:
-            print(f"Dry run: {len(all_boxes)} region(s) would be redacted. No file written.")
+            print(f"Dry run: {len(all_boxes)} region(s) would be redacted (targets={targets}). No file written.")
             return True
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
@@ -138,7 +147,7 @@ def find_image_files(directory: str) -> list[str]:
     return files
 
 
-def run_batch(input_dir: str, output_dir: str, blur: int, use_faces: bool, use_gemini: bool, dry_run: bool) -> None:
+def run_batch(input_dir: str, output_dir: str, blur: int, use_faces: bool, use_gemini: bool, dry_run: bool, targets: str = "all") -> None:
     image_files = find_image_files(input_dir)
     if not image_files:
         print(f"No image files found in {input_dir}")
@@ -154,7 +163,7 @@ def run_batch(input_dir: str, output_dir: str, blur: int, use_faces: bool, use_g
         print(f"[{i}/{total}] processing {name}...")
         output_path = os.path.join(output_dir, f"redacted_{name}")
 
-        if process_image(image_path, output_path, blur, use_faces, use_gemini, dry_run):
+        if process_image(image_path, output_path, blur, use_faces, use_gemini, dry_run, targets):
             succeeded += 1
             status = "done"
         else:
@@ -201,11 +210,11 @@ def main():
 
     if os.path.isdir(args.input):
         output_dir = args.output or "output"
-        run_batch(args.input, output_dir, args.blur, use_faces, use_gemini, args.dry_run)
+        run_batch(args.input, output_dir, args.blur, use_faces, use_gemini, args.dry_run, args.targets)
         return
 
     output_path = args.output or os.path.join("output", f"redacted_{os.path.basename(args.input)}")
-    if not process_image(args.input, output_path, args.blur, use_faces, use_gemini, args.dry_run):
+    if not process_image(args.input, output_path, args.blur, use_faces, use_gemini, args.dry_run, args.targets):
         sys.exit(1)
 
 

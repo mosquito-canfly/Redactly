@@ -16,6 +16,8 @@ from starlette.background import BackgroundTask
 from main import process_image
 from redactly.redact import DEFAULT_BLUR_RADIUS
 
+_TARGETS = ("all", "faces", "text")
+
 app = FastAPI(title="Redactly API")
 
 app.add_middleware(
@@ -39,10 +41,17 @@ def health():
 
 
 @app.post("/redact")
-async def redact(file: UploadFile = File(...), mode: str = Form("free"), blur: int = Form(None)):
+async def redact(
+    file: UploadFile = File(...),
+    mode: str = Form("free"),
+    blur: int = Form(None),
+    targets: str = Form("all"),
+):
     """Redact an uploaded image and return the result as an image file."""
     if mode not in _MODES:
         return JSONResponse(status_code=400, content={"error": f"invalid mode {mode!r}, must be one of {list(_MODES)}"})
+    if targets not in _TARGETS:
+        return JSONResponse(status_code=400, content={"error": f"invalid targets {targets!r}, must be one of {list(_TARGETS)}"})
     if not file.filename or not (file.content_type or "").startswith("image/"):
         return JSONResponse(status_code=400, content={"error": "no valid image file uploaded"})
 
@@ -54,7 +63,7 @@ async def redact(file: UploadFile = File(...), mode: str = Form("free"), blur: i
         input_path = tmp_in.name
     output_path = tempfile.NamedTemporaryFile(suffix=suffix, delete=False).name
 
-    ok = process_image(input_path, output_path, blur or DEFAULT_BLUR_RADIUS, use_faces, use_gemini, dry_run=False)
+    ok = process_image(input_path, output_path, blur or DEFAULT_BLUR_RADIUS, use_faces, use_gemini, dry_run=False, targets=targets)
 
     if not ok:
         os.remove(input_path)
