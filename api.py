@@ -22,9 +22,20 @@ app = FastAPI(title="Redactly API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
+    # Chrome's Private Network Access preflight (sent when the frontend origin
+    # is treated as "public" relative to this loopback backend) is rejected by
+    # default, which breaks the browser fetch even though a plain curl/OPTIONS
+    # check without this header looks fine.
+    allow_private_network=True,
 )
 
 # mode -> (use_faces, use_gemini), mirrors main.py's --no-vision / default / --smart tiers
