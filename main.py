@@ -5,9 +5,8 @@ import os
 import sys
 import time
 
-from redactly.ocr import extract_text_boxes
 from redactly.redact import redact_boxes, filter_boxes_by_targets, DEFAULT_BLUR_RADIUS
-from redactly.classify import filter_sensitive_boxes
+from redactly.classify import detect_sensitive_text_boxes
 from redactly.llm import detect_sensitive_regions
 from redactly.faces import detect_faces
 from redactly.agent import run_agent
@@ -43,11 +42,6 @@ def print_free_mode_note() -> None:
           "names, and hard-to-read IDs. Use --smart for full coverage (uses Gemini quota).")
 
 
-def detect_regex_boxes(image_path: str) -> list[dict]:
-    """OCR the image and return only the boxes flagged as sensitive by regex."""
-    return filter_sensitive_boxes(extract_text_boxes(image_path))
-
-
 def detect_face_boxes(image_path: str, skip: bool) -> list[dict]:
     """Run local face detection, unless skipped. Never raises."""
     if skip:
@@ -81,7 +75,8 @@ def print_summary(
     if not regex_boxes:
         print("  (none)")
     for box in regex_boxes:
-        print(f"  {box['text']!r}")
+        # a box merged from two overlapping OCR passes may not carry the original "text"
+        print(f"  {box['text']!r}" if "text" in box else f"  {box}")
 
     if use_faces:
         print("Flagged by face detection:")
@@ -117,7 +112,7 @@ def process_image(
 ) -> bool:
     """Run the full detect+redact pipeline on one image. Returns True on success."""
     try:
-        regex_boxes = detect_regex_boxes(image_path)
+        regex_boxes = detect_sensitive_text_boxes(image_path)
         face_boxes = detect_face_boxes(image_path, skip=not use_faces)
         gemini_boxes = detect_vision_boxes(image_path, skip=not use_gemini)
         print_summary(regex_boxes, face_boxes, gemini_boxes, use_faces, use_gemini)

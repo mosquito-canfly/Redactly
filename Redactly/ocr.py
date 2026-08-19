@@ -15,20 +15,26 @@ if shutil.which("tesseract") is None and os.path.exists(_DEFAULT_WINDOWS_TESSERA
     pytesseract.pytesseract.tesseract_cmd = _DEFAULT_WINDOWS_TESSERACT
 
 
-def extract_text_boxes(image_path: str) -> list[dict]:
+def extract_text_boxes(image_path: str, preprocess: bool = True) -> list[dict]:
     """Run OCR on an image and return each detected word with its bounding box.
 
-    OCR runs on a preprocessed (possibly upscaled) version of the image for
-    better accuracy; box coordinates are scaled back to match the original.
+    By default OCR runs on a preprocessed (possibly upscaled) version of the
+    image for better accuracy, with box coordinates scaled back to match the
+    original. Pass preprocess=False to OCR the raw image instead — sometimes
+    preprocessing garbles text (e.g. drops a dot) that the raw image reads fine.
 
     Each item in the returned list has keys: text, left, top, width, height, conf.
     Empty/whitespace text and non-text regions (conf < 0) are skipped.
     """
-    original_width = Image.open(image_path).width
-    processed = preprocess_for_ocr(image_path)
-    scale = processed.width / original_width
+    if preprocess:
+        original_width = Image.open(image_path).width
+        image = preprocess_for_ocr(image_path)
+        scale = image.width / original_width
+    else:
+        image = Image.open(image_path)
+        scale = 1
 
-    data = pytesseract.image_to_data(processed, output_type=pytesseract.Output.DICT)
+    data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
 
     boxes = []
     for i in range(len(data["text"])):

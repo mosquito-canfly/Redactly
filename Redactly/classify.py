@@ -2,6 +2,9 @@
 
 import re
 
+from redactly.ocr import extract_text_boxes
+from redactly.redact import merge_overlapping_boxes
+
 # Named so new patterns can be added without touching the matching logic.
 PATTERNS = {
     # user@domain.tld
@@ -30,6 +33,21 @@ def is_sensitive_regex(text: str) -> bool:
 def filter_sensitive_boxes(boxes: list[dict]) -> list[dict]:
     """Return only the boxes whose text is flagged as sensitive."""
     return [box for box in boxes if is_sensitive_regex(box["text"])]
+
+
+def detect_sensitive_text_boxes(image_path: str) -> list[dict]:
+    """OCR the image TWICE — raw and preprocessed — and return merged sensitive-text boxes.
+
+    Preprocessing (upscale/grayscale/contrast) improves OCR on low-quality
+    images but sometimes garbles text a raw read would get right (e.g. drops
+    the dot in "user@x.com" -> "user@xcom"), and vice versa for noisy images.
+    Running both passes and merging catches text either pass alone would miss.
+    # ponytail: doubles OCR time per image; worth it since a missed email/ID
+    # is a real privacy miss, not just a quality nit.
+    """
+    raw_boxes = filter_sensitive_boxes(extract_text_boxes(image_path, preprocess=False))
+    preprocessed_boxes = filter_sensitive_boxes(extract_text_boxes(image_path, preprocess=True))
+    return merge_overlapping_boxes(raw_boxes + preprocessed_boxes)
 
 
 if __name__ == "__main__":
