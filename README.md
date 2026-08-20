@@ -18,9 +18,11 @@ Available as a CLI for single images or whole folders, and as a small web app
 ## Screenshots
 
 ![Redactly UI](docs/ui.png)
+
 *The web UI: drag-and-drop upload, mode/target/blur controls, before-and-after result.*
 
 ![Before and after redaction](docs/result.png)
+
 *An ID card screenshot before and after redaction — face and printed ID text blurred.*
 
 ## Features
