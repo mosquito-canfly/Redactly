@@ -104,7 +104,7 @@ def print_summary(
 def process_image(
     image_path: str,
     output_path: str,
-    blur: int,
+    blur: int | None,
     use_faces: bool,
     use_gemini: bool,
     dry_run: bool,
@@ -124,7 +124,9 @@ def process_image(
             return True
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-        redact_boxes(image_path, all_boxes, output_path, blur_radius=blur)
+        # blur=0 means "use the default strength", not "no blur" — a literal 0
+        # would silently ship an unredacted region, which is worse than ignoring it.
+        redact_boxes(image_path, all_boxes, output_path, blur_radius=blur or DEFAULT_BLUR_RADIUS)
         print(f"Saved: {output_path}")
         return True
     except Exception as e:

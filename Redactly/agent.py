@@ -7,7 +7,7 @@ from google.genai import types
 from PIL import Image
 
 from redactly.config import require_gemini_key
-from redactly.llm import MODEL, detect_sensitive_regions  # reuse the model that's already confirmed working
+from redactly.llm import MODEL, call_with_retry, detect_sensitive_regions  # reuse the model that's already confirmed working
 from redactly.ocr import extract_text_boxes
 from redactly.classify import is_sensitive_regex
 from redactly.redact import redact_boxes
@@ -75,7 +75,8 @@ def agent_single_step(image_path: str) -> None:
             image_bytes = f.read()
 
         client = genai.Client(api_key=require_gemini_key())
-        response = client.models.generate_content(
+        response = call_with_retry(
+            client.models.generate_content,
             model=MODEL,
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
@@ -146,7 +147,7 @@ def run_agent(image_path: str, output_path: str, max_steps: int = 10) -> None:
 
     for step in range(1, max_steps + 1):
         try:
-            response = client.models.generate_content(model=MODEL, contents=contents, config=config)
+            response = call_with_retry(client.models.generate_content, model=MODEL, contents=contents, config=config)
         except Exception as e:
             print(f"ERROR: Gemini call failed at step {step}: {e}")
             return

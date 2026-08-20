@@ -14,7 +14,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from main import process_image
-from redactly.redact import DEFAULT_BLUR_RADIUS
 
 _TARGETS = ("all", "faces", "text")
 
@@ -74,7 +73,8 @@ async def redact(
         input_path = tmp_in.name
     output_path = tempfile.NamedTemporaryFile(suffix=suffix, delete=False).name
 
-    ok = process_image(input_path, output_path, blur or DEFAULT_BLUR_RADIUS, use_faces, use_gemini, dry_run=False, targets=targets)
+    # process_image treats a falsy blur (None or 0) as "use the default strength"
+    ok = process_image(input_path, output_path, blur, use_faces, use_gemini, dry_run=False, targets=targets)
 
     if not ok:
         os.remove(input_path)

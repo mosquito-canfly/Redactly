@@ -10,6 +10,10 @@ import urllib.request
 
 import cv2
 
+# Silences OpenCV's noisy dnn-backend WARNING (e.g. "Targets are not supported
+# by the new graph engine") on every YuNet call. ERROR and above still print.
+cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+
 _MODEL_DIR = "models"
 _MODEL_PATH = os.path.join(_MODEL_DIR, "face_detection_yunet.onnx")
 _MODEL_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"

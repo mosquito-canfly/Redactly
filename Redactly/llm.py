@@ -2,9 +2,10 @@
 
 import json
 import mimetypes
+import time
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 from PIL import Image
 
 from redactly.config import require_gemini_key
@@ -12,6 +13,35 @@ from redactly.config import require_gemini_key
 # gemini-2.5-flash returns 404 for this account (deprecated for new users) —
 # reusing the model that test_connection() already confirmed works.
 MODEL = "gemini-flash-latest"
+
+
+def _is_retryable(e: Exception) -> bool:
+    """True for transient errors worth retrying: 429/503, or a connection reset."""
+    if isinstance(e, errors.APIError) and e.code in (429, 503):
+        return True
+    if isinstance(e, (ConnectionError, TimeoutError)):
+        return True
+    text = str(e)
+    return "RESOURCE_EXHAUSTED" in text or "UNAVAILABLE" in text or "10054" in text
+
+
+def call_with_retry(fn, *args, max_retries: int = 5, base_delay: float = 2.0, **kwargs):
+    """Call fn(*args, **kwargs), retrying on transient errors with exponential backoff.
+
+    Retries only rate-limit (429), unavailable (503), and connection-reset
+    errors. Anything else re-raises immediately — this is not a general
+    error-swallower. Re-raises the last error if all retries are exhausted;
+    callers are expected to already catch and degrade gracefully.
+    """
+    for attempt in range(max_retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            if not _is_retryable(e) or attempt == max_retries - 1:
+                raise
+            delay = base_delay * 2**attempt
+            print(f"NOTE: transient Gemini error ({e}); retrying in {delay:.0f}s...")
+            time.sleep(delay)
 
 _DETECT_PROMPT = """You are a privacy redaction assistant. Find every region in \
 this image containing sensitive personal information: ID/IC numbers, faces, \
@@ -86,7 +116,8 @@ def detect_sensitive_regions(image_path: str) -> list[dict]:
             image_bytes = f.read()
 
         client = genai.Client(api_key=require_gemini_key())
-        response = client.models.generate_content(
+        response = call_with_retry(
+            client.models.generate_content,
             model=MODEL,
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
@@ -106,4 +137,37 @@ if __name__ == "__main__":
     assert _parse_regions('```json\n[{"label": "x", "box": {"left": 0, "top": 0, "width": 1, "height": 1}}]\n```') != []
     assert _parse_regions("not json") == []
     assert _parse_regions('[{"label": "bad"}]') == []  # missing box, skipped not crashed
+
+    # call_with_retry: succeeds after transient failures, doesn't retry real errors
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise errors.ServerError(503, {"error": {"message": "UNAVAILABLE"}})
+        return "ok"
+
+    assert call_with_retry(flaky, base_delay=0.01) == "ok"
+    assert calls["n"] == 3
+
+    def always_fails_retryable():
+        raise ConnectionResetError("connection reset")
+
+    try:
+        call_with_retry(always_fails_retryable, max_retries=2, base_delay=0.01)
+        assert False, "should have raised after exhausting retries"
+    except ConnectionResetError:
+        pass
+
+    calls["n"] = 0
+
+    def counts_then_fails():
+        calls["n"] += 1
+        raise ValueError("bad input")
+
+    try:
+        call_with_retry(counts_then_fails, base_delay=0.01)
+        assert False, "should have raised immediately"
+    except ValueError:
+        assert calls["n"] == 1  # no retries for a non-retryable error
     print("llm.py self-check passed")
